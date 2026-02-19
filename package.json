@@ -1,0 +1,16 @@
+{
+  "name": "investment-decision-ai",
+  "version": "1.0.0",
+  "description": "AIを使った日本株投資判断アプリ",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": ["投資", "株", "AI", "Gemini"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}
