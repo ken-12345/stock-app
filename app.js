@@ -62,6 +62,9 @@ const els = {
   customSearchInput: document.getElementById('customSearchInput'),
   customAnalyzeBtn: document.getElementById('customAnalyzeBtn'),
   clearSearchBtn: document.getElementById('clearSearchBtn'),
+  // データ日付
+  dataDateDisplay: document.getElementById('dataDateDisplay'),
+  soaringDataDateDisplay: document.getElementById('soaringDataDateDisplay'),
   // モデル選択
   fetchModelsBtn: document.getElementById('fetchModelsBtn'),
   modelSelect: document.getElementById('modelSelect'),
@@ -325,12 +328,22 @@ async function fetchStopHighStocks() {
   els.loadingState.style.display = 'flex';
   els.fetchStatus.textContent = 'データ取得中...';
 
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+  // 市場終了時刻（15:30）を考慮したターゲット日付の決定
+  const now = new Date();
+  const cutoff = new Date();
+  cutoff.setHours(15, 30, 0, 0);
+
+  let targetDate = new Date();
+  if (now < cutoff) {
+    // 15:30前なら前日のデータを取得
+    targetDate.setDate(targetDate.getDate() - 1);
+  }
+
+  const dateStr = targetDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const prompt = `
 あなたは日本株の専門アナリストです。
-本日（${dateStr}）の東京証券取引所の「ストップ高銘柄」と「急騰銘柄（前日比+10%以上）」を、Yahoo!ファイナンスや株探などのサイトから取得してください。
+取得対象日（${dateStr}）の東京証券取引所の「ストップ高銘柄」と「急騰銘柄（前日比+10%以上）」を、Yahoo!ファイナンスや株探などのサイトから取得してください。
 
 以下のJSON形式で出力してください。他のテキストは一切含めず、JSONのみを出力してください：
 
@@ -386,8 +399,21 @@ async function fetchStopHighStocks() {
       }
     }
 
-    state.stockList = data.stopHighs || (data.stocks ? data.stocks : []); // 旧形式互換
-    state.soaringList = data.soaring || [];
+    // データの日付をUIに反映
+    if (data.date) {
+      if (els.dataDateDisplay) els.dataDateDisplay.textContent = `(${data.date})`;
+      if (els.soaringDataDateDisplay) els.soaringDataDateDisplay.textContent = `(${data.date})`;
+    }
+
+    const stopHighs = data.stopHighs || (data.stocks ? data.stocks : []); // 旧形式互換
+    const soaringRaw = data.soaring || [];
+
+    // 重複排除: ストップ高銘柄に含まれるコードを急騰銘柄から除外
+    const stopHighCodes = new Set(stopHighs.map(s => String(s.code)));
+    const filteredSoaring = soaringRaw.filter(s => !stopHighCodes.has(String(s.code)));
+
+    state.stockList = stopHighs;
+    state.soaringList = filteredSoaring;
 
     // ストップ高テーブル描画
     renderStockTable(state.stockList, sources, 'stockTableBody', 'stockCount', 'emptyState', 'tableContainer');
@@ -505,13 +531,19 @@ async function analyzeStock(code, name, market, price, change, material) {
   // スクロール
   els.reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+  // 市場終了時刻（15:30）を考慮したターゲット日付の決定
+  const now = new Date();
+  const cutoff = new Date();
+  cutoff.setHours(15, 30, 0, 0);
+
+  let targetDate = new Date();
+  if (now < cutoff) {
+    targetDate.setDate(targetDate.getDate() - 1);
+  }
+  const dateStr = targetDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const prompt = `
-あなたは日本株専門のトップアナリストです。感情ではなくデータと根拠に基づいて投資判断を提示します。
-
-以下の銘柄を分析してください：
+分析対象日（${dateStr}）における、以下の銘柄を分析してください：
 - 銘柄コード: ${code}
 - 銘柄名: ${name}
 - 市場: ${market}
