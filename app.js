@@ -329,21 +329,13 @@ async function fetchStopHighStocks() {
   els.fetchStatus.textContent = 'データ取得中...';
 
   // 市場終了時刻（15:30）を考慮したターゲット日付の決定
-  const now = new Date();
-  const cutoff = new Date();
-  cutoff.setHours(15, 30, 0, 0);
-
-  let targetDate = new Date();
-  if (now < cutoff) {
-    // 15:30前なら前日のデータを取得
-    targetDate.setDate(targetDate.getDate() - 1);
-  }
-
+  const targetDate = getTargetTradingDate();
   const dateStr = targetDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const prompt = `
 あなたは日本株の専門アナリストです。
 取得対象日（${dateStr}）の東京証券取引所の「ストップ高銘柄」と「急騰銘柄（前日比+10%以上）」を、Yahoo!ファイナンスや株探などのサイトから取得してください。
+もし指定した日付が祝日で休場の場合は、その直前の営業日のデータを取得してください。
 
 以下のJSON形式で出力してください。他のテキストは一切含めず、JSONのみを出力してください：
 
@@ -532,14 +524,7 @@ async function analyzeStock(code, name, market, price, change, material) {
   els.reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   // 市場終了時刻（15:30）を考慮したターゲット日付の決定
-  const now = new Date();
-  const cutoff = new Date();
-  cutoff.setHours(15, 30, 0, 0);
-
-  let targetDate = new Date();
-  if (now < cutoff) {
-    targetDate.setDate(targetDate.getDate() - 1);
-  }
+  const targetDate = getTargetTradingDate();
   const dateStr = targetDate.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
 
   const prompt = `
@@ -552,7 +537,8 @@ async function analyzeStock(code, name, market, price, change, material) {
 - ストップ高理由: ${material}
 - 分析日: ${dateStr}
 
-Yahoo!ファイナンス、株探、みんかぶ、会社のIRページ、EDINET等から以下の情報を取得して分析してください：
+Yahoo!ファイナンス、株探、みんかぶ、会社のIRページ、EDINET等から以下の情報を取得して分析してください。
+もし指定した日付が祝日で休場の場合は、その直前の営業日のデータを取得・分析してください。
 1. 最新決算（売上高、営業利益、経常利益、純利益、前年比成長率）
 2. 財務指標（自己資本比率、有利子負債、営業CF）
 3. バリュエーション（PER、PBR、ROE、配当利回り）
@@ -939,6 +925,31 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+/**
+ * 直近の取引日（営業日）を計算する
+ * 15:30前なら前日、土日なら金曜日まで遡る
+ */
+function getTargetTradingDate() {
+  const now = new Date();
+  const cutoff = new Date();
+  cutoff.setHours(15, 30, 0, 0);
+
+  let target = new Date(now);
+  
+  // 15:30前ならまず1日戻す
+  if (now < cutoff) {
+    target.setDate(target.getDate() - 1);
+  }
+
+  // 土日を回避（日曜=0, 土曜=6）
+  // ループで金曜日まで戻す
+  while (target.getDay() === 0 || target.getDay() === 6) {
+    target.setDate(target.getDate() - 1);
+  }
+
+  return target;
 }
 
 // ===== 起動 =====
